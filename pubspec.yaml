@@ -21,7 +21,7 @@ dependencies:
   workmanager: ^0.5.1
   flutter_alarm_clock: any
   flutter_background_service: ^2.4.6
-  flutter_local_notifications: ^9.4.0
+  flutter_local_notifications: ^13.0.0
   shared_preferences: ^2.0.16
   path_provider: ^2.0.11
   rxdart: any
