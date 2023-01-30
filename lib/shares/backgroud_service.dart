@@ -6,9 +6,9 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter_background_service/flutter_background_service.dart';
-import 'package:flutter_source/shares/file.dart';
 import 'package:flutter_source/shares/local_notify.dart';
 import 'package:flutter_source/shares/preferences.dart';
+import 'package:flutter_source/shares/sql_lite.dart';
 import 'package:flutter_source/src/alarm/model/random_model.dart';
 
 class BackgroundService {
@@ -26,15 +26,10 @@ class BackgroundService {
   }
 
   static Future<void> configure() async {
-    // const notificationChannelId = 'random';
-    // const notificationId = 2701;
-
     await FlutterBackgroundService().configure(
       androidConfiguration: AndroidConfiguration(
         onStart: onStart,
         isForegroundMode: true,
-        // notificationChannelId: notificationChannelId,
-        // foregroundServiceNotificationId: notificationId,
         initialNotificationTitle: 'Random',
         initialNotificationContent: 'Random is running',
       ),
@@ -51,94 +46,153 @@ class BackgroundService {
     });
 
     final time = await Preferences.getSetting();
+    final parse = (double.tryParse(time) ?? 1) * 1000;
     final multi = await Preferences.getMultiRandom();
     Timer? timmer;
+    Timer? timmer1;
+
     if (multi.isNotEmpty) {
       final rs = json.decode(multi);
 
-      timmer = Timer.periodic(Duration(seconds: int.tryParse(time) ?? 1),
-          (timer) async {
-        final rng = math.Random();
+      timmer =
+          Timer.periodic(Duration(milliseconds: parse.toInt()), (timer) async {
         final min = int.tryParse(rs['start'] as String) ?? 0;
         final max = int.tryParse(rs['end'] as String) ?? 0;
 
         final coin = int.tryParse(rs['coin'] as String) ?? 0;
+        final listRandom = <String>[];
+        final list = genListRandom(min, max, coin, listRandom);
 
-        final listRan = <RandomModel>[];
-        final list = <RandomList>[];
-        for (var i = 1; i <= coin; i++) {
-          final random = (min + rng.nextInt((max + 1) - min)).toString();
+        await _saveList(list, Sqllite.tableRandomMulti);
 
-          if (_checkNumber(random)) {
-            listRan.add(
-              RandomModel(
-                coin: i.toString(),
-                random: random,
-              ),
-            );
-
-            list.add(
-              RandomList(
-                list: listRan,
-                createdAt: DateTime.now(),
-              ),
-            );
-            await _saveList(list);
-
-            await LocalNotificationService.display(
-              'Kết quả random',
-              random,
-              null,
-            );
-            timmer?.cancel();
-            await service.stopSelf();
-          }
-
-          listRan.add(
-            RandomModel(
-              coin: i.toString(),
-              random: random,
-            ),
+        if (_checkList(listRandom, coin > 1)) {
+          await LocalNotificationService.display(
+            'Kết quả random',
+            listRandom.first,
+            null,
           );
-
-          list.add(
-            RandomList(
-              list: listRan,
-              createdAt: DateTime.now(),
-            ),
-          );
+          timmer?.cancel();
+          await service.stopSelf();
         }
-
-        await _saveList(list);
       });
     }
 
     final one = await Preferences.getOneRandom();
     if (one.isNotEmpty) {
-      final rs = json.decode(one);
+      timmer1 =
+          Timer.periodic(Duration(milliseconds: parse.toInt()), (timer) async {
+        final rs = json.decode(one);
+        final min = int.tryParse(rs['start'] as String) ?? 0;
+        final max = int.tryParse(rs['end'] as String) ?? 0;
+        final coin = int.tryParse(rs['coin'] as String) ?? 0;
 
-      Timer.periodic(Duration(seconds: int.tryParse(time) ?? 1), (timer) async {
-        final rng = math.Random();
+        final listRandom = <String>[];
+        final list = genListRandom(min, max, coin, listRandom);
+
+        await _saveList(list, Sqllite.tableRandomOne);
+        final listNoti = await Preferences.getNotification();
+        if (_checkList(listRandom, coin > 1)) {
+          if (listNoti.contains(listRandom.first)) {
+            await LocalNotificationService.display(
+              'Kết quả random',
+              listRandom.first,
+              null,
+            );
+            timmer1?.cancel();
+            await service.stopSelf();
+          }
+        }
       });
     }
   }
 
-  static Future<void> _saveList(List<RandomList> random) async {
-    final map = await FileLocal().readFile();
+  static List<RandomList> genListRandom(
+    int min,
+    int max,
+    int coin,
+    List<String> listRandom,
+  ) {
+    final rng = math.Random();
+    final listRan = <RandomModel>[];
+    final list = <RandomList>[];
 
-    var list = <RandomList>[];
-    if (map.isNotEmpty) {
-      final temp = json.decode(map) as List;
-      list = temp
-          .map((e) => RandomList.fromJson(e as Map<String, dynamic>))
-          .toList();
+    for (var i = 1; i <= coin; i++) {
+      final random = (min + rng.nextInt((max + 1) - min)).toString();
+
+      listRan.add(
+        RandomModel(
+          coin: i.toString(),
+          random: random,
+        ),
+      );
+      listRandom.add(random);
+      // if (_checkNumber(random)) {
+      //   listRandom.add(random);
+      // }
+
+      list.add(
+        RandomList(
+          list: listRan,
+          createdAt: DateTime.now(),
+        ),
+      );
     }
 
-    // ignore: cascade_invocations
-    list.addAll(random);
-    list = list.reversed.toList();
+    return list;
+  }
 
-    await FileLocal().writeFile(json.encode(list));
+  static Future<void> _saveList(List<RandomList> random, String table) async {
+    final map = <String, dynamic>{};
+
+    for (var i in random) {
+      i.toJson().forEach((key, value) {
+        if (value is! String) {
+          map[key] = json.encoder.convert(value);
+        } else {
+          map[key] = value;
+        }
+      });
+    }
+
+    await Sqllite.insert(map, table);
+  }
+
+  // static Future<void> _saveList(List<RandomList> random) async {
+  //   final map = await FileLocal().readFile();
+
+  //   var list = <RandomList>[];
+  //   if (map.isNotEmpty) {
+  //     final temp = json.decode(map) as List;
+  //     list = temp
+  //         .map((e) => RandomList.fromJson(e as Map<String, dynamic>))
+  //         .toList();
+  //   }
+
+  //   // ignore: cascade_invocations
+  //   list.addAll(random);
+  //   list = list.reversed.toList();
+
+  //   await FileLocal().writeFile(json.encode(list));
+  // }
+
+  // static bool _checkList(List<String> list, int countCoin) {
+  //   return list.length == countCoin;
+  // }
+
+  static bool _checkList(List<String> list, bool isMulti) {
+    if (list.length == 1) {
+      if (isMulti) {
+        return false;
+      }
+
+      return true;
+    }
+
+    final temp = list.toSet().toList();
+    if (temp.length == 1) {
+      return true;
+    }
+    return false;
   }
 
   static bool _checkNumber(String number) {

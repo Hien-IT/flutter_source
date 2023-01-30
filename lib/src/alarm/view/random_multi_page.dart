@@ -85,6 +85,11 @@ class _AlarmPageState extends State<RandomMultiPage> {
     if (_formKey.currentState!.validate()) {
       BlocProvider.of<RandomMultiBloc>(context).add(RandomMultiCheckTime());
     }
+
+    final currentFocus = FocusScope.of(context);
+    if (!currentFocus.hasPrimaryFocus && currentFocus.focusedChild != null) {
+      FocusManager.instance.primaryFocus!.unfocus();
+    }
   }
 
   Future<void> cancelTask(BuildContext context) async {
@@ -265,7 +270,7 @@ class _AlarmPageState extends State<RandomMultiPage> {
             child: ListView.builder(
               itemCount: state.list.length,
               itemBuilder: (context, index) {
-                return _buildItem(context, state.list[index]);
+                return _buildItem(context, state.list[index], index + 1);
               },
             ),
           );
@@ -274,22 +279,26 @@ class _AlarmPageState extends State<RandomMultiPage> {
       },
     );
   }
-}
 
-Widget _buildItem(BuildContext context, RandomList item) {
-  final list = <Widget>[];
+  Widget _buildItem(BuildContext context, RandomList item, int index) {
+    var text = '';
 
-  for (var i = 0; i < (item.list ?? []).length; i++) {
-    list.add(
-      ListTile(
-        title: Text('${item.list?[i].random}'),
-        subtitle: Text('coin: ${item.list?[i].coin}'),
+    for (var i = 0; i < (item.list ?? []).length; i++) {
+      text += ' ${item.list?[i].random}, ';
+    }
+
+    if (text.endsWith(', ')) {
+      text = text.substring(0, text.length - 2);
+    }
+
+    text = '$index: $text';
+
+    return ColoredBox(
+      color: index % 2 == 0 ? Colors.grey.shade200 : Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Text(text),
       ),
     );
   }
-
-  return Column(
-    mainAxisSize: MainAxisSize.min,
-    children: list,
-  );
 }

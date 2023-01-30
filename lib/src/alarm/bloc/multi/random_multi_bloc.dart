@@ -3,9 +3,10 @@ import 'dart:convert';
 
 import 'package:bloc/bloc.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:flutter_source/app/config.dart';
 import 'package:flutter_source/shares/backgroud_service.dart';
-import 'package:flutter_source/shares/file.dart';
 import 'package:flutter_source/shares/preferences.dart';
+import 'package:flutter_source/shares/sql_lite.dart';
 import 'package:flutter_source/src/alarm/model/random_model.dart';
 
 part 'random_multi_event.dart';
@@ -18,10 +19,12 @@ class RandomMultiBloc extends Bloc<RandomMultiEvent, RandomMultiState> {
       } else if (event is RandomMultiEventStart) {
         await start(event.start, event.end, event.coin);
         await startTimer();
+        AppConfig.isMultiStart = true;
         emit(RandomMultiStarted(isStart: true));
       } else if (event is RandomMultiEventStop) {
         stop();
         stopTimer();
+        AppConfig.isMultiStart = false;
         emit(RandomMultiStarted(isStart: false));
       } else if (event is RandomMultiCheckTime) {
         emit(RandomMultiTimeChecked(isChecked: await checkTime()));
@@ -41,27 +44,58 @@ class RandomMultiBloc extends Bloc<RandomMultiEvent, RandomMultiState> {
   }
 
   Future<void> getListRandom() async {
-    final map = await FileLocal().readFile();
-
-    var list = <RandomList>[];
+    final map = await Sqllite.queryAllRows(Sqllite.tableRandomMulti);
+    final list = <RandomList>[];
     if (map.isNotEmpty) {
-      final temp = json.decode(map) as List;
-      list = temp
-          .map((e) => RandomList.fromJson(e as Map<String, dynamic>))
-          .toList();
+      for (final e in map) {
+        if (e['list'] != null) {
+          final temp = e['list'] as String;
+
+          final decode = json.decode(temp) as List;
+
+          final listTemp = <RandomModel>[];
+
+          for (final i in decode) {
+            final temp = RandomModel.fromJson(i as Map<String, dynamic>);
+            listTemp.add(temp);
+          }
+          final date = e['createdAt'] as String;
+          list.add(
+            RandomList(list: listTemp, createdAt: DateTime.parse(date)),
+          );
+        }
+      }
 
       if (list.isNotEmpty) {
         add(StateChange(LastRandomMultiLoaded(item: list.first.list ?? [])));
       }
     }
-
     add(StateChange(ListRandomMultiLoaded(list: list)));
   }
 
+  // Future<void> getListRandom() async {
+  //   final map = await FileLocal().readFile();
+
+  //   var list = <RandomList>[];
+  //   if (map.isNotEmpty) {
+  //     final temp = json.decode(map) as List;
+  //     list = temp
+  //         .map((e) => RandomList.fromJson(e as Map<String, dynamic>))
+  //         .toList();
+
+  //     if (list.isNotEmpty) {
+  //       add(StateChange(LastRandomMultiLoaded(item: list.first.list ?? [])));
+  //     }
+  //   }
+
+  //   add(StateChange(ListRandomMultiLoaded(list: list)));
+  // }
+
   Future<void> startTimer() async {
     final time = await Preferences.getSetting();
+    final parse = (double.tryParse(time) ?? 1) * 1000;
     timer = Timer.periodic(
-      Duration(seconds: int.tryParse(time) ?? 1),
+      Duration(milliseconds: parse.toInt()),
       (timer) async {
         await getListRandom();
 
@@ -84,7 +118,9 @@ class RandomMultiBloc extends Bloc<RandomMultiEvent, RandomMultiState> {
   }
 
   void stop() {
-    FlutterBackgroundService().invoke('stopService');
+    if (!AppConfig.isOneStart) {
+      FlutterBackgroundService().invoke('stopService');
+    }
   }
 
   Future<void> start(

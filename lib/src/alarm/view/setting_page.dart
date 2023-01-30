@@ -12,11 +12,12 @@ class SettingPage extends StatefulWidget {
 
 class _SettingPageState extends State<SettingPage> {
   final timeController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (context) => SettingBloc()..add(SettingEventLoad()),
-      child: _buildBody(),
+      child: Form(key: _formKey, child: _buildBody()),
     );
   }
 
@@ -45,9 +46,26 @@ class _SettingPageState extends State<SettingPage> {
             _buildTime(context),
             ElevatedButton(
               onPressed: () {
-                context
-                    .read<SettingBloc>()
-                    .add(SettingEventSave(timeController.text));
+                if (_formKey.currentState!.validate()) {
+                  final currentFocus = FocusScope.of(context);
+                  if (!currentFocus.hasPrimaryFocus &&
+                      currentFocus.focusedChild != null) {
+                    FocusManager.instance.primaryFocus!.unfocus();
+                  }
+
+                  timeController.text =
+                      timeController.text.replaceAll(',', '.');
+
+                  context
+                      .read<SettingBloc>()
+                      .add(SettingEventSave(timeController.text));
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Lưu thành công'),
+                    ),
+                  );
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green,

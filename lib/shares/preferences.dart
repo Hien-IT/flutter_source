@@ -11,6 +11,7 @@ class Preferences {
   static const _one = 'One';
   static const _listMulti = 'ListMulti';
   static const _listOne = 'ListOne';
+  static const _listNotification = 'ListNotification';
 
   static Future<void> saveSetting(
     String data,
@@ -105,5 +106,22 @@ class Preferences {
   static Future<void> clearListOne() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_listOne);
+  }
+
+  static Future<void> saveNotification(
+    List<String> data,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_listNotification, data);
+  }
+
+  static Future<List<String>> getNotification() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getStringList(_listNotification) ?? <String>[];
+  }
+
+  static Future<void> clearNotification() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_listNotification);
   }
 }
