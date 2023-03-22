@@ -22,7 +22,7 @@ dependencies:
   flutter_alarm_clock: any
   flutter_background_service: ^2.4.6
   flutter_local_notifications: ^9.4.0
-  shared_preferences: ^2.0.16
+  shared_preferences: ^2.0.20
   path_provider: ^2.0.11
   rxdart: any
   sqflite: ^2.2.3
